@@ -4,7 +4,8 @@
   "description": "High-performance Desktop Runner and Model Manager for PrismML llama.cpp and Bonsai low-bit/ternary models",
   "main": "electron/main.cjs",
   "scripts": {
-    "dev": "electron .",
+    "dev": "vite build && electron .",
+    "dev:live": "concurrently -k \"vite\" \"wait-on tcp:5173 && electron . --dev\"",
     "start": "electron .",
     "build": "vite build",
     "build:ui": "vite build",

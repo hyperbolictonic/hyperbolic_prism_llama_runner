@@ -4,9 +4,21 @@ const fs = require('fs');
 const os = require('os');
 const { spawn, exec } = require('child_process');
 
+// Prevent GPU disk cache lock errors and shader cache collisions on Windows
+app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
+
+// Use standard OS user-data directory rather than local workspace folder to avoid Windows file-locking
 try {
-  app.setPath('userData', path.join(process.cwd(), '.electron_data'));
+  app.setPath('userData', path.join(app.getPath('appData'), 'hyperbolic-prism-llama-runner'));
 } catch (e) {}
+
+// Enforce single instance lock to prevent multiple Electron processes from conflicting on disk cache
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  console.log('Hyperbolic Prism Llama Runner is already running. Focusing active window.');
+  app.quit();
+  process.exit(0);
+}
 
 let mainWindow = null;
 let serverProcess = null;
@@ -221,6 +233,13 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+});
+
+app.on('second-instance', () => {
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
+  }
 });
 
 app.on('window-all-closed', () => {
