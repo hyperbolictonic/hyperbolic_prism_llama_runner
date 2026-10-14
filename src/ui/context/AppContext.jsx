@@ -304,6 +304,13 @@ export function AppProvider({ children }) {
     } catch (e) {}
   }
 
+  async function clearLogs() {
+    setLogs([]);
+    try {
+      await window.tiny.api.call('clearServerLogs');
+    } catch (e) {}
+  }
+
   function applyGlobalPreset(presetKey) {
     setActivePreset(presetKey);
     const cores = systemInfo?.cpuCores || 8;
