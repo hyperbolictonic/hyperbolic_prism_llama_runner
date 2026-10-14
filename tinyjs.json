@@ -1,0 +1,8 @@
+{
+  "name": "prism-bonsai-runner",
+  "title": "Prism Bonsai Runner & Model Manager",
+  "size": "1240x840",
+  "id": "ai.prismml.bonsai.runner",
+  "version": "1.0.0",
+  "debug": true
+}

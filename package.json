@@ -1,0 +1,43 @@
+{
+  "name": "hyperbolic-prism-llama-runner",
+  "version": "1.0.0",
+  "description": "High-performance Desktop Runner and Model Manager for PrismML llama.cpp and Bonsai low-bit/ternary models",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "electron .",
+    "start": "electron .",
+    "build": "vite build",
+    "build:ui": "vite build",
+    "watch:ui": "vite build --watch"
+  },
+  "keywords": [
+    "llama.cpp",
+    "prismml",
+    "bonsai",
+    "tinyjs",
+    "llm-runner"
+  ],
+  "author": "Prism Bonsai Runner",
+  "license": "MIT",
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.3.3",
+    "@tailwindcss/vite": "^4.3.3",
+    "@vitejs/plugin-react": "^6.1.2",
+    "concurrently": "^10.0.6",
+    "daisyui": "^5.7.48",
+    "electron": "^44.7.0",
+    "tailwindcss": "^4.3.3",
+    "vite": "^8.3.4",
+    "wait-on": "^9.5.1"
+  },
+  "dependencies": {
+    "lucide-react": "^1.55.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "pnpm": {
+    "ignoredBuiltDependencies": [
+      "@parcel/watcher"
+    ]
+  }
+}

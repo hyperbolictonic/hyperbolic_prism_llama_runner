@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Production build artifacts
+dist/
+.build/
+.electron_data/
+
+# Model storage & weights (large binary files)
+models/*
+!models/.gitkeep
+*.gguf
+*.bin
+*.mmproj
+*.safetensors
+
+# Downloaded llama.cpp runtime binaries & libraries
+bin/
+*.exe
+*.dll
+
+# OS generated files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs & temp
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local environment configuration
+.env
+.env.local
+.env.*.local

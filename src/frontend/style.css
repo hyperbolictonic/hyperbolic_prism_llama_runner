@@ -1,0 +1,115 @@
+/* ==========================================================================
+   PRISM BONSAI RUNNER - STYLES & LAYOUT SYSTEM
+   Tailwind CSS 4 + DaisyUI 5 Plugin Desktop Integration
+   ========================================================================== */
+
+/* App Window Container */
+html, body {
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.15);
+}
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* Window Dragging for TinyJS WebView2 */
+[data-tiny-drag] {
+  -webkit-app-region: drag;
+  user-select: none;
+}
+[data-tiny-nodrag], button, input, textarea, select, a, .tab, .btn {
+  -webkit-app-region: no-drag;
+}
+
+/* Tab Pane Visibility & Layout Control */
+.tab-pane {
+  display: none !important;
+}
+
+.tab-pane.active {
+  display: flex !important;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Status Dot Indicators */
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.status-dot.stopped {
+  background: #64748b;
+  box-shadow: 0 0 6px rgba(100, 116, 139, 0.6);
+}
+.status-dot.starting {
+  background: #fbbf24;
+  box-shadow: 0 0 8px #fbbf24;
+  animation: pulse-ring 1s infinite;
+}
+.status-dot.running {
+  background: #38bdf8;
+  box-shadow: 0 0 10px #38bdf8;
+  animation: pulse-ring 2s infinite;
+}
+
+/* Pulse Ring Animation */
+.pulse-ring {
+  position: absolute;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  border: 2px solid #38bdf8;
+  opacity: 0;
+  z-index: 1;
+}
+.pulse-ring.active {
+  animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(0.85); opacity: 0.8; }
+  100% { transform: scale(1.4); opacity: 0; }
+}
+
+/* Crisp Component Geometry (Not overly rounded) */
+.card {
+  border-radius: 8px;
+}
+.btn {
+  border-radius: 6px;
+}
+.input, .textarea {
+  border-radius: 6px;
+}
+
+/* DaisyUI Lifted Tab Active Styling in Night Theme */
+.tab.tab-active {
+  border-top: 2px solid #38bdf8 !important;
+  color: #fff !important;
+  font-weight: 600;
+}
+
+/* Fix Mockup Code background & scrolling */
+.mockup-code pre {
+  padding-right: 1.5rem;
+}
