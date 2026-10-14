@@ -218,7 +218,11 @@ export async function openHubFileModal(repoId) {
       item.innerHTML = `
         <div class="min-w-0 flex-1">
           <div class="font-mono text-xs font-bold text-white truncate">${esc(f.name)}</div>
-          <div class="text-xs text-base-content/60 font-mono">${esc(f.quant)} ${f.isMmproj ? '· Vision Projector' : ''}</div>
+          <div class="text-xs text-base-content/60 font-mono mt-0.5 flex items-center gap-2">
+            <span>Size: <strong class="text-white">${esc(f.sizeFormatted || '—')}</strong></span>
+            <span>·</span>
+            <span>${esc(f.quant)} ${f.isMmproj ? '· Vision Projector' : ''}</span>
+          </div>
         </div>
         <div class="shrink-0">
           ${isAlreadyDownloaded ? `

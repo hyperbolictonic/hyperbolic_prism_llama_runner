@@ -120,8 +120,17 @@ export default function Dashboard() {
                 </button>
               ) : (
                 <button onClick={startServer} disabled={isStarting} className="btn btn-primary btn-sm gap-2 font-bold shadow-md">
-                  <Play className="w-4 h-4 fill-current" />
-                  <span>Start Server</span>
+                  {isStarting ? (
+                    <>
+                      <span className="loading loading-spinner loading-xs"></span>
+                      <span>Loading Model...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Play className="w-4 h-4 fill-current" />
+                      <span>Start Server</span>
+                    </>
+                  )}
                 </button>
               )}
 
@@ -220,7 +229,7 @@ export default function Dashboard() {
               </div>
 
               {activeMmproj && (
-                <div className="flex items-center gap-1.5 pt-1 text-2xs text-secondary font-mono border-t border-base-300/40">
+                <div className="flex items-center gap-1.5 pt-1 text-2xs text-sky-400 font-mono border-t border-base-300/40">
                   <Eye className="w-3.5 h-3.5" />
                   <span>Vision Projector: {activeMmproj.name}</span>
                 </div>

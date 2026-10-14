@@ -14,7 +14,11 @@ import {
   Gauge, 
   Hash,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Image as ImageIcon,
+  Paperclip,
+  X,
+  Eye
 } from 'lucide-react';
 
 export default function Playground() {
@@ -23,11 +27,13 @@ export default function Playground() {
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
-      content: 'Hello! I am ready to assist. You can adjust sampling parameters or start chatting directly below.',
+      content: 'Hello! I am ready to assist. You can type a prompt below, or attach an image to test multimodal vision capabilities with --mmproj.',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     }
   ]);
   const [inputText, setInputText] = useState('');
+  const [attachedImage, setAttachedImage] = useState(null); // { file, dataUrl, name, size }
+  const [selectedPreviewImage, setSelectedPreviewImage] = useState(null);
   const [systemPrompt, setSystemPrompt] = useState('You are a helpful, concise AI assistant.');
   const [showSystemPrompt, setShowSystemPrompt] = useState(false);
   const [showDrawer, setShowDrawer] = useState(false);
@@ -46,6 +52,63 @@ export default function Playground() {
 
   const messagesEndRef = useRef(null);
   const abortControllerRef = useRef(null);
+  const fileInputRef = useRef(null);
+
+  const formatFileSize = (bytes) => {
+    if (!bytes) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i] || 'MB'}`;
+  };
+
+  const processImageFile = (file) => {
+    if (!file || !file.type.startsWith('image/')) {
+      if (window.tiny && window.tiny.dialog) {
+        window.tiny.dialog.alert('Invalid File', 'Please select a valid image file (PNG, JPEG, WebP, GIF).');
+      }
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setAttachedImage({
+        file,
+        dataUrl: e.target.result,
+        name: file.name,
+        size: formatFileSize(file.size),
+      });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      processImageFile(file);
+    }
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleRemoveAttachedImage = () => {
+    setAttachedImage(null);
+  };
+
+  const handlePaste = (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        const file = items[i].getAsFile();
+        if (file) {
+          processImageFile(file);
+          break;
+        }
+      }
+    }
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -57,7 +120,7 @@ export default function Playground() {
 
   const handleSendMessage = async () => {
     const text = inputText.trim();
-    if (!text || isGenerating) return;
+    if ((!text && !attachedImage) || isGenerating) return;
 
     if (!serverStatus.running) {
       if (window.tiny && window.tiny.dialog) {
@@ -69,10 +132,16 @@ export default function Playground() {
     }
 
     const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    const userMsg = { role: 'user', content: text, timestamp: timeStr };
+    const userMsg = { 
+      role: 'user', 
+      content: text || (attachedImage ? 'Describe this image in detail.' : ''), 
+      image: attachedImage ? attachedImage.dataUrl : null,
+      timestamp: timeStr 
+    };
     const nextMessages = [...messages, userMsg];
     setMessages(nextMessages);
     setInputText('');
+    setAttachedImage(null);
 
     // Prepare assistant placeholder
     const assistantMsg = { role: 'assistant', content: '', timestamp: timeStr };
@@ -87,9 +156,21 @@ export default function Playground() {
     const port = serverStatus.port || config.port || 8080;
     const endpoint = `http://${host}:${port}/v1/chat/completions`;
 
+    // OpenAI multimodal chat completions structure for llama-server --mmproj
     const chatPayload = [
       { role: 'system', content: systemPrompt },
-      ...nextMessages.map(m => ({ role: m.role, content: m.content }))
+      ...nextMessages.map(m => {
+        if (m.image) {
+          return {
+            role: m.role,
+            content: [
+              { type: 'text', text: m.content || 'Describe this image in detail.' },
+              { type: 'image_url', image_url: { url: m.image } }
+            ]
+          };
+        }
+        return { role: m.role, content: m.content };
+      })
     ];
 
     abortControllerRef.current = new AbortController();
@@ -340,6 +421,17 @@ export default function Playground() {
                         : 'bg-primary text-black font-medium shadow-md'
                     }`}
                   >
+                    {msg.image && (
+                      <div className="mb-2">
+                        <img 
+                          src={msg.image} 
+                          alt="Uploaded user visual input" 
+                          className="max-w-xs max-h-56 rounded-md border border-black/20 object-cover cursor-pointer hover:opacity-90 transition-opacity shadow-sm"
+                          onClick={() => setSelectedPreviewImage(msg.image)}
+                          title="Click to view full image"
+                        />
+                      </div>
+                    )}
                     {msg.content || (
                       <span className="loading loading-dots loading-xs opacity-70" />
                     )}
@@ -353,39 +445,104 @@ export default function Playground() {
 
         {/* Bottom Input Box (Generous breathing room, un-squished) */}
         <div className="p-4 bg-base-200/90 border-t border-base-300 shrink-0">
-          <div className="flex items-end gap-3 max-w-5xl mx-auto">
+          <div className="max-w-5xl mx-auto space-y-2.5">
             
-            <div className="flex-1 relative">
-              <textarea
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Type your prompt... (Press Enter to send, Shift+Enter for newline)"
-                rows={2}
-                disabled={isGenerating}
-                className="textarea textarea-bordered w-full bg-base-100 text-sm leading-relaxed resize-none focus:border-primary pr-12 shadow-inner"
-              />
-            </div>
-
-            {isGenerating ? (
-              <button
-                onClick={handleStop}
-                className="btn btn-error h-13 px-5 gap-2 font-bold shadow-md shrink-0"
-              >
-                <Square className="w-4 h-4 fill-current" />
-                <span>Stop</span>
-              </button>
-            ) : (
-              <button
-                onClick={handleSendMessage}
-                disabled={!inputText.trim()}
-                className="btn btn-primary h-13 px-6 gap-2 font-bold shadow-md shrink-0 text-black"
-              >
-                <Send className="w-4 h-4" />
-                <span>Send</span>
-              </button>
+            {/* Staged Image Attachment Chip */}
+            {attachedImage && (
+              <div className="flex items-center gap-2.5 bg-base-100 border border-primary/40 rounded-lg p-2 w-fit shadow-md animate-fade-in">
+                <img 
+                  src={attachedImage.dataUrl} 
+                  alt="Attachment preview" 
+                  className="w-12 h-12 object-cover rounded border border-base-300 cursor-pointer"
+                  onClick={() => setSelectedPreviewImage(attachedImage.dataUrl)}
+                  title="Click to preview"
+                />
+                <div className="flex flex-col text-xs pr-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-semibold text-white max-w-[180px] truncate">{attachedImage.name}</span>
+                    <span className="badge badge-primary badge-xs font-mono font-bold">Vision</span>
+                  </div>
+                  <span className="text-2xs text-base-content/60 font-mono mt-0.5">{attachedImage.size}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleRemoveAttachedImage}
+                  className="btn btn-ghost btn-xs btn-circle text-base-content/70 hover:text-error hover:bg-base-200"
+                  title="Remove image"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
             )}
 
+            <div className="flex items-end gap-2.5">
+              
+              {/* Hidden Native File Input */}
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileSelect}
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                className="hidden"
+              />
+
+              {/* Attach Image Button */}
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isGenerating}
+                className={`btn btn-sm h-12 px-3.5 gap-2 border border-base-300 shadow-sm transition-all ${
+                  attachedImage 
+                    ? 'btn-primary text-black font-bold' 
+                    : 'btn-neutral bg-base-100 hover:bg-base-300 text-base-content'
+                }`}
+                title={
+                  config.selectedMmproj 
+                    ? "Attach an image to test vision projector (--mmproj active)" 
+                    : "Attach an image for vision testing (make sure an mmproj model is selected)"
+                }
+              >
+                <ImageIcon className="w-4 h-4 text-primary fill-primary/20" />
+                <span className="hidden sm:inline text-xs font-semibold">Image</span>
+              </button>
+
+              <div className="flex-1 relative">
+                <textarea
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  onPaste={handlePaste}
+                  placeholder={
+                    attachedImage 
+                      ? "Ask a question about this image... (e.g. 'Describe what you see', 'What text is in this image?')"
+                      : "Type your prompt... (Press Enter to send, Shift+Enter for newline, or paste image with Ctrl+V)"
+                  }
+                  rows={2}
+                  disabled={isGenerating}
+                  className="textarea textarea-bordered w-full bg-base-100 text-sm leading-relaxed resize-none focus:border-primary pr-12 shadow-inner"
+                />
+              </div>
+
+              {isGenerating ? (
+                <button
+                  onClick={handleStop}
+                  className="btn btn-error h-12 px-5 gap-2 font-bold shadow-md shrink-0"
+                >
+                  <Square className="w-4 h-4 fill-current" />
+                  <span>Stop</span>
+                </button>
+              ) : (
+                <button
+                  onClick={handleSendMessage}
+                  disabled={!inputText.trim() && !attachedImage}
+                  className="btn btn-primary h-12 px-6 gap-2 font-bold shadow-md shrink-0 text-black"
+                >
+                  <Send className="w-4 h-4" />
+                  <span>Send</span>
+                </button>
+              )}
+
+            </div>
           </div>
         </div>
 
@@ -481,6 +638,32 @@ export default function Playground() {
           </div>
 
         </aside>
+      )}
+
+      {/* Image Full-Size Preview Modal */}
+      {selectedPreviewImage && (
+        <div 
+          className="modal modal-open bg-black/85 backdrop-blur-sm z-50 p-4 flex items-center justify-center cursor-pointer animate-fade-in"
+          onClick={() => setSelectedPreviewImage(null)}
+        >
+          <div 
+            className="relative max-w-4xl max-h-[90vh] bg-base-200 border border-base-300 rounded-xl p-2 shadow-2xl flex flex-col items-center cursor-default"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setSelectedPreviewImage(null)}
+              className="btn btn-sm btn-circle btn-neutral absolute -top-3 -right-3 shadow-lg border border-base-300 text-white hover:text-error"
+              title="Close preview"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <img 
+              src={selectedPreviewImage} 
+              alt="Expanded preview" 
+              className="max-w-full max-h-[82vh] rounded-lg object-contain"
+            />
+          </div>
+        </div>
       )}
 
     </div>

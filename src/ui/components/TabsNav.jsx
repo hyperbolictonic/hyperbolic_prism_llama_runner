@@ -3,11 +3,20 @@ import { useApp } from '../context/AppContext';
 import { Activity, Boxes, MessageSquare, Terminal, Settings, Database } from 'lucide-react';
 
 export default function TabsNav() {
-  const { activeTab, setActiveTab, localModels, logs, config } = useApp();
+  const { activeTab, setActiveTab, localModels, logs, config, downloadInfo } = useApp();
+
+  const isDownloading = Boolean(downloadInfo);
+  const dlBadge = isDownloading ? `DL ${downloadInfo.progress || 0}%` : null;
 
   const tabs = [
     { id: 'runner', label: 'Inference Supervisor', icon: Activity },
-    { id: 'models', label: 'Model Manager & Hub', icon: Boxes, badge: localModels.length || null },
+    { 
+      id: 'models', 
+      label: 'Model Manager & Hub', 
+      icon: Boxes, 
+      badge: dlBadge || (localModels.length || null),
+      isDownload: isDownloading,
+    },
     { id: 'context', label: 'KV Cache & Context', icon: Database, badge: config.cacheTypeK ? config.cacheTypeK.toUpperCase() : 'Q8_0' },
     { id: 'playground', label: 'Chat Playground', icon: MessageSquare },
     { id: 'logs', label: 'Live Logs', icon: Terminal, badge: logs.length > 0 ? `${logs.length}` : null },
@@ -32,7 +41,13 @@ export default function TabsNav() {
               <Icon className={`w-4 h-4 ${isActive ? 'text-primary' : 'opacity-70'}`} />
               <span>{tab.label}</span>
               {tab.badge && (
-                <span className={`badge badge-xs ml-1 font-mono ${isActive ? 'badge-primary text-black font-bold' : 'badge-neutral'}`}>
+                <span className={`badge badge-xs ml-1 font-mono ${
+                  tab.isDownload 
+                    ? 'badge-primary text-black font-bold animate-pulse' 
+                    : isActive 
+                      ? 'badge-primary text-black font-bold' 
+                      : 'badge-neutral'
+                }`}>
                   {tab.badge}
                 </span>
               )}

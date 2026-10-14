@@ -26,41 +26,49 @@ Built with **Electron**, **React 19**, **Vite**, **Tailwind CSS 4**, and **daisy
 ### 2. 🧠 Context Window & KV Cache Optimizer
 *Engineered to Atomic Chat & LM Studio standards for maximum context retention.*
 - **Live VRAM Footprint Estimator**: Real-time memory calculation and savings percentage compared to uncompressed F16 baselines.
-- **Quantized KV Tensors**: Independent precision controls for Key Cache (`-ctk`) and Value Cache (`-ctv`) supporting `q8_0`, `q4_0`, `q4_1`, `q5_0`, `q5_1`, and `f16`.
+- **Quantized KV Tensors**: Independent precision controls for Key Cache (`-ctk`) and Value Cache (`-ctv`) supporting `q8_0`, `q4_0`, `q4_1`, `q5_0`, `q5_1`, and `f16` (enables 256K context on 16GB consumer GPUs).
 - **Unified Batching Pipeline**:
   - **Logical Prompt Batch (`-b`)**: Controls tokens evaluated per ingestion step.
   - **Physical Micro-Batch (`-ub`)**: Regulates physical compute chunk size to prevent VRAM spikes.
   - Automatic `-ub ≤ -b` engine rule enforcement and interactive clamping.
-- **Flash Attention (`-fa`)**: Hardware-accelerated memory management to prevent quadratic memory explosion during long prompt ingest.
-- **Context Shifting (`--ctx-shift`)**: Automatically scrolls older context on limit overflow so conversations never crash.
+- **Flash Attention (`-fa on`)**: Hardware-accelerated memory management to prevent quadratic memory explosion during long prompt ingest.
+- **Context Shifting (`--context-shift`)**: Automatically scrolls older context on limit overflow so conversations never crash.
 - **Prompt Cache Reuse (`--cache-reuse`)**: Keeps system prompts and common prefixes in cache across turns for near-instant Time-To-First-Token.
 - **RoPE Scaling**: Built-in YaRN and Linear frequency scaling for massive context expansion.
 
-### 3. 📦 Model Manager & Hugging Face Hub
+### 3. 📦 Model Manager & Vision Companion Bundling
 - **Local Model Library**: Scans your models directory for `.gguf` weights and `.mmproj` vision projectors. Auto-tags quantization formats (`1-bit Q1_0`, `Ternary PQ2_0`, `PTQ1_0`, `Q4_K_M`, etc.).
+- **Atomic Model + Vision Bundling**: Automatically pairs base language models (e.g., `Ternary-Bonsai-2-27B-PQ2_0`) with their companion vision projectors (e.g., `Ternary-Bonsai-2-27B-mmproj-BF16`). Features a single **"Activate Model + Vision"** button that atomically assigns both `-m` and `--mmproj`, preventing invalid projector selection errors.
 - **Hugging Face Hub Explorer**: Search and browse official PrismML models (`prism-ml/Bonsai-8B-gguf`, `prism-ml/Ternary-Bonsai-2-27B-gguf`, etc.), inspect available quantizations, and download directly with real-time speed meters and progress bars.
+- **HF Token Integration**: Built-in Hugging Face token configuration for unthrottled high-speed downloads directly from gated and public repositories.
 - **Folder Selector**: Native Windows directory picker for custom storage folders on separate drives.
 
-### 4. 💬 Interactive Chat Playground
+### 4. 💬 Interactive Chat Playground & Multimodal Testing
 - **Streaming Generation**: Token-by-token streaming over the OpenAI-compatible `/v1/chat/completions` API.
+- **Multimodal Vision Testing**:
+  - **Image Attachment Button**: Attach local `.png`, `.jpg`, `.jpeg`, `.webp`, or `.gif` files directly to your prompt.
+  - **Clipboard Paste (`Ctrl + V`)**: Instantly paste screenshots directly into the prompt box for rapid inspection.
+  - **Staged Attachment Preview**: Shows thumbnail chips with file size, vision badges, and remove actions before sending.
+  - **Click-to-Expand Preview**: Full-screen modal viewer for high-resolution inspection of uploaded images in chat bubbles.
+  - **Automated Grounding**: Automatically injects `--image-min-tokens 1024` for high-fidelity vision reasoning on Qwen-VL / Bonsai architectures.
 - **Live Inference Telemetry**:
   - **TPS (Tokens / Second)**
   - **TTFT (Time to First Token)**
   - **Total Tokens Evaluated**
 - **Inference Levers**: Fine-tune System Prompt, Temperature, Top-P, and Max Tokens on the fly.
-- **Multimodal Support**: Automatically attaches vision projectors (`--mmproj`) for image-based reasoning.
 
 ### 5. 📜 Live Server Logs
 - Virtualized terminal stream displaying real-time stdout and stderr output from `llama-server.exe`.
 - Level filtering (All, Info, Warning, Error), regex search, auto-scroll toggle, and copy-to-clipboard.
 
-### 6. 🚀 Hardware-Aware Binary Installer
+### 6. 🚀 Hardware-Aware Binary Installer & Supervision
 - **Hardware Detection**: Automatically detects installed NVIDIA GeForce/RTX, AMD Radeon, or CPU environments.
+- **Reliable Windows DLL Injection**: Automatically resolves and prepends runtime binary directories (`ggml.dll`, `ggml-cuda.dll`, `llama.dll`) into the execution environment to eliminate silent startup crashes.
+- **Extended Health Readiness**: Configurable 120-second readiness polling accommodating large 27B model loads into VRAM.
 - **1-Click Binary Installer**: Fetches pre-compiled PrismML runtime packages directly from GitHub releases:
   - **NVIDIA CUDA 13.3 / 12.4** (with companion CUDA runtime DLLs automatically unpacked)
   - **Vulkan** (Cross-GPU acceleration)
   - **CPU (AVX2/Zen4)**
-- **Verification & Integrity**: Checks binary presence, dependencies, and reports runtime compatibility status.
 
 ---
 

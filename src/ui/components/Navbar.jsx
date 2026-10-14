@@ -65,8 +65,17 @@ export default function Navbar() {
             className="btn btn-primary btn-sm gap-2 font-bold shadow-md"
             title="Start Inference Server"
           >
-            <Play className="w-3.5 h-3.5 fill-current" />
-            <span>Start Server</span>
+            {isStarting ? (
+              <>
+                <span className="loading loading-spinner loading-xs"></span>
+                <span>Starting...</span>
+              </>
+            ) : (
+              <>
+                <Play className="w-3.5 h-3.5 fill-current" />
+                <span>Start Server</span>
+              </>
+            )}
           </button>
         )}
 

@@ -47,7 +47,22 @@ const DEFAULT_CONFIG = {
   selectedMmproj: '',
   binaryPath: '',
   extraArgs: '',
+  hfToken: '',
 };
+
+function getHfToken(config) {
+  const cfg = config || loadConfig();
+  return (cfg.hfToken || '').trim() || process.env.HF_TOKEN || process.env.HUGGING_FACE_HUB_TOKEN || '';
+}
+
+function getHfHeaders(config) {
+  const headers = { 'User-Agent': 'PrismBonsaiRunnerElectron/1.0' };
+  const token = getHfToken(config);
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
+}
 
 let serverStatus = {
   running: false,
@@ -105,14 +120,27 @@ function formatBytes(bytes) {
 
 function detectQuantType(filename) {
   const f = filename.toUpperCase();
-  if (f.includes('Q1_0') || f.includes('1BIT') || f.includes('1-BIT')) return '1-bit (Q1_0)';
-  if (f.includes('PQ2_0') || f.includes('TERNARY-2') || f.includes('2BIT') || f.includes('2-BIT')) return 'Ternary (PQ2_0)';
-  if (f.includes('PTQ1_0')) return 'Ternary (PTQ1_0)';
-  if (f.includes('Q4_K_M') || f.includes('Q4_K')) return '4-bit (Q4_K_M)';
-  if (f.includes('Q8_0')) return '8-bit (Q8_0)';
-  if (f.includes('F16') || f.includes('FP16')) return '16-bit (FP16)';
-  if (f.includes('BF16')) return '16-bit (BF16)';
   if (f.includes('MMPROJ')) return 'Vision Projector';
+  if (f.includes('PTQ1_0')) return 'Ternary (PTQ1_0)';
+  if (f.includes('PQ2_0') || f.includes('TERNARY-2')) return 'Ternary (PQ2_0)';
+  if (f.includes('Q1_0') || f.includes('1BIT') || f.includes('1-BIT') || f.includes('BITNET')) return '1-bit (Q1_0)';
+  if (f.includes('IQ1_S') || f.includes('IQ1_M')) return '1-bit (IQ1)';
+  if (f.includes('IQ2_XXS') || f.includes('IQ2_XS') || f.includes('IQ2_S') || f.includes('IQ2_M') || f.includes('Q2_K') || f.includes('Q2_0')) return '2-bit (Q2)';
+  if (f.includes('IQ3_XXS') || f.includes('IQ3_S') || f.includes('IQ3_M') || f.includes('Q3_K') || f.includes('Q3_0')) return '3-bit (Q3)';
+  if (f.includes('Q4_K_M')) return '4-bit (Q4_K_M)';
+  if (f.includes('Q4_K_S')) return '4-bit (Q4_K_S)';
+  if (f.includes('Q4_0')) return '4-bit (Q4_0)';
+  if (f.includes('Q4_1')) return '4-bit (Q4_1)';
+  if (f.includes('IQ4_NL') || f.includes('IQ4_XS')) return '4-bit (IQ4)';
+  if (f.includes('Q4_K')) return '4-bit (Q4_K)';
+  if (f.includes('Q5_K_M')) return '5-bit (Q5_K_M)';
+  if (f.includes('Q5_K_S')) return '5-bit (Q5_K_S)';
+  if (f.includes('Q5_0') || f.includes('Q5_1') || f.includes('Q5_K')) return '5-bit (Q5)';
+  if (f.includes('Q6_K')) return '6-bit (Q6_K)';
+  if (f.includes('Q8_0') || f.includes('Q8_K')) return '8-bit (Q8_0)';
+  if (f.includes('BF16')) return '16-bit (BF16)';
+  if (f.includes('F16') || f.includes('FP16')) return '16-bit (FP16)';
+  if (f.includes('F32') || f.includes('FP32')) return '32-bit (FP32)';
   return 'GGUF Model';
 }
 
@@ -325,6 +353,14 @@ ipcMain.handle('openInExplorer', async (_event, { path: targetPath }) => {
   }
 });
 
+ipcMain.handle('openExternalUrl', async (_event, { url }) => {
+  if (url && (url.startsWith('https://') || url.startsWith('http://'))) {
+    shell.openExternal(url);
+    return { success: true };
+  }
+  return { success: false };
+});
+
 ipcMain.handle('searchHuggingFace', async (_event, { query = '' }) => {
   const curated = [
     {
@@ -374,7 +410,7 @@ ipcMain.handle('searchHuggingFace', async (_event, { query = '' }) => {
       url = `https://huggingface.co/api/models?search=${encodeURIComponent(q)}&limit=30&sort=downloads&direction=-1`;
     }
 
-    const res = await fetch(url, { headers: { 'User-Agent': 'PrismBonsaiRunnerElectron/1.0' } });
+    const res = await fetch(url, { headers: getHfHeaders() });
     if (!res.ok) throw new Error(`HF API HTTP ${res.status}`);
     const data = await res.json();
 
@@ -402,57 +438,238 @@ ipcMain.handle('searchHuggingFace', async (_event, { query = '' }) => {
 });
 
 ipcMain.handle('getHfModelFiles', async (_event, { repoId }) => {
-  const url = `https://huggingface.co/api/models/${repoId}`;
-  const res = await fetch(url, { headers: { 'User-Agent': 'PrismBonsaiRunnerElectron/1.0' } });
-  const data = await res.json();
-  const files = [];
+  try {
+    const files = [];
+    const headers = getHfHeaders();
 
-  for (const s of data.siblings || []) {
-    if (s.rfilename.toLowerCase().endsWith('.gguf')) {
-      const clean = s.rfilename.split('/').pop();
-      files.push({
-        name: clean,
-        filename: clean,
-        path: s.rfilename,
-        repoId,
-        quant: detectQuantType(s.rfilename),
-        isMmproj: s.rfilename.toLowerCase().includes('mmproj'),
-        sizeFormatted: s.size ? formatBytes(s.size) : 'GGUF',
-        downloadUrl: `https://huggingface.co/${repoId}/resolve/main/${s.rfilename}`,
-      });
+    // 1. First attempt: fetch model siblings with blob metadata (including sizes)
+    let data = null;
+    try {
+      const url = `https://huggingface.co/api/models/${repoId}?blobs=true`;
+      const res = await fetch(url, { headers });
+      if (res.ok) {
+        data = await res.json();
+      }
+    } catch (e) {
+      console.warn('Failed to fetch HF model blobs info:', e.message);
     }
+
+    if (data && Array.isArray(data.siblings) && data.siblings.length > 0) {
+      for (const s of data.siblings) {
+        const lower = (s.rfilename || '').toLowerCase();
+        if (lower.endsWith('.gguf') || lower.endsWith('.mmproj')) {
+          const clean = s.rfilename.split('/').pop();
+          const sizeBytes = (s.lfs && typeof s.lfs.size === 'number' && s.lfs.size > 0)
+            ? s.lfs.size
+            : (typeof s.size === 'number' ? s.size : 0);
+
+          files.push({
+            name: clean,
+            filename: clean,
+            path: s.rfilename,
+            repoId,
+            quant: detectQuantType(clean),
+            isMmproj: lower.includes('mmproj'),
+            sizeBytes,
+            sizeFormatted: sizeBytes > 0 ? formatBytes(sizeBytes) : 'Unknown size',
+            downloadUrl: `https://huggingface.co/${repoId}/resolve/main/${s.rfilename}`,
+          });
+        }
+      }
+    }
+
+    // 2. Fallback to recursive tree endpoint if siblings returned nothing or sizes were zero
+    const needsTreeFallback = files.length === 0 || files.some(f => f.sizeBytes === 0);
+    if (needsTreeFallback) {
+      try {
+        const treeUrl = `https://huggingface.co/api/models/${repoId}/tree/main?recursive=true`;
+        const treeRes = await fetch(treeUrl, { headers });
+        if (treeRes.ok) {
+          const treeData = await treeRes.json();
+          if (Array.isArray(treeData)) {
+            const sizeMap = new Map();
+            for (const item of treeData) {
+              if (item.type === 'file' && item.path) {
+                const sBytes = (item.lfs && typeof item.lfs.size === 'number' && item.lfs.size > 0)
+                  ? item.lfs.size
+                  : (typeof item.size === 'number' ? item.size : 0);
+                sizeMap.set(item.path, sBytes);
+              }
+            }
+
+            if (files.length === 0) {
+              for (const [filePath, sBytes] of sizeMap.entries()) {
+                const lower = filePath.toLowerCase();
+                if (lower.endsWith('.gguf') || lower.endsWith('.mmproj')) {
+                  const clean = filePath.split('/').pop();
+                  files.push({
+                    name: clean,
+                    filename: clean,
+                    path: filePath,
+                    repoId,
+                    quant: detectQuantType(clean),
+                    isMmproj: lower.includes('mmproj'),
+                    sizeBytes: sBytes,
+                    sizeFormatted: sBytes > 0 ? formatBytes(sBytes) : 'Unknown size',
+                    downloadUrl: `https://huggingface.co/${repoId}/resolve/main/${filePath}`,
+                  });
+                }
+              }
+            } else {
+              for (const f of files) {
+                if (f.sizeBytes === 0 && sizeMap.has(f.path)) {
+                  f.sizeBytes = sizeMap.get(f.path);
+                  if (f.sizeBytes > 0) {
+                    f.sizeFormatted = formatBytes(f.sizeBytes);
+                  }
+                }
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('HF recursive tree fallback failed:', e.message);
+      }
+    }
+
+    // 3. Fallback HEAD request for any remaining items with unknown size
+    const missingSizeFiles = files.filter(f => f.sizeBytes === 0);
+    if (missingSizeFiles.length > 0 && missingSizeFiles.length <= 15) {
+      await Promise.allSettled(missingSizeFiles.map(async (f) => {
+        try {
+          const headRes = await fetch(f.downloadUrl, {
+            method: 'HEAD',
+            headers,
+            redirect: 'follow',
+            signal: AbortSignal.timeout(3000),
+          });
+          const cl = headRes.headers.get('content-length');
+          if (cl) {
+            const bytes = parseInt(cl, 10);
+            if (!isNaN(bytes) && bytes > 0) {
+              f.sizeBytes = bytes;
+              f.sizeFormatted = formatBytes(bytes);
+            }
+          }
+        } catch (e) {}
+      }));
+    }
+
+    // Sort files logically: regular models by size descending, vision mmproj grouped at bottom
+    files.sort((a, b) => {
+      if (a.isMmproj !== b.isMmproj) return a.isMmproj ? 1 : -1;
+      return (b.sizeBytes || 0) - (a.sizeBytes || 0);
+    });
+
+    return files;
+  } catch (err) {
+    console.error('getHfModelFiles error:', err);
+    throw new Error('Failed to retrieve repository quantizations: ' + err.message);
   }
-  return files;
 });
 
-ipcMain.handle('downloadHfFile', async (_event, { repoId, filename, downloadUrl }) => {
+let downloadQueue = [];
+let isDownloading = false;
+
+function startNextDownloadInQueue() {
+  if (downloadQueue.length === 0) {
+    isDownloading = false;
+    activeDownloadProcess = null;
+    return;
+  }
+
+  isDownloading = true;
+  const item = downloadQueue[0];
+
   const config = loadConfig();
   const destDir = config.modelsDir || path.join(process.cwd(), 'models');
   if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
 
-  const cleanFilename = filename.split('/').pop();
+  const cleanFilename = item.filename.split('/').pop();
   const destPath = path.join(destDir, cleanFilename);
 
   const downloadInfo = {
     filename: cleanFilename,
     downloadedFormatted: '0 B',
+    totalFormatted: item.sizeBytes ? formatBytes(item.sizeBytes) : '',
+    progress: 0,
     speed: 'Connecting...',
+    batchIndex: item.batchIndex || 1,
+    batchTotal: item.batchTotal || 1,
+    parentModelFilename: item.parentModelFilename || cleanFilename,
   };
 
   mainWindow?.webContents.send('download-progress', { type: 'start', info: downloadInfo });
 
-  const curlScript = `curl.exe -# -L -o "${destPath}" "${downloadUrl}"`;
-  const proc = spawn('cmd.exe', ['/c', curlScript]);
+  let proc;
+  const token = getHfToken(config);
+  const curlArgs = [
+    '-#',
+    '-L',
+    '-C', '-',
+    '-A', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+    '--connect-timeout', '30',
+    '--keepalive-time', '15',
+    '--speed-limit', '1024',
+    '--speed-time', '25',
+    '--retry', '8',
+    '--retry-delay', '2',
+    '--retry-all-errors',
+  ];
+  if (token) {
+    curlArgs.push('-H', `Authorization: Bearer ${token}`);
+  }
+  curlArgs.push('-o', destPath, item.downloadUrl);
+
+  try {
+    proc = spawn('curl.exe', curlArgs, { windowsHide: true });
+  } catch (err) {
+    const authHeader = token ? `-H "Authorization: Bearer ${token}" ` : '';
+    proc = spawn('cmd.exe', ['/c', `curl.exe -# -L -C - --speed-limit 1024 --speed-time 25 --retry 8 ${authHeader}-o "${destPath}" "${item.downloadUrl}"`]);
+  }
   activeDownloadProcess = proc;
 
-  const startTime = Date.now();
+  let stderrBuffer = '';
+  if (proc.stderr) {
+    proc.stderr.on('data', (d) => {
+      stderrBuffer += d.toString();
+      if (stderrBuffer.length > 4000) stderrBuffer = stderrBuffer.slice(-4000);
+    });
+  }
+
+  proc.on('error', (err) => {
+    console.error('Download spawn error:', err);
+    clearInterval(progressTimer);
+    activeDownloadProcess = null;
+    downloadQueue = [];
+    isDownloading = false;
+    mainWindow?.webContents.send('download-progress', { type: 'error', message: err.message });
+  });
+
+  let lastBytes = fs.existsSync(destPath) ? fs.statSync(destPath).size : 0;
+  let lastTime = Date.now();
+
   const progressTimer = setInterval(() => {
     if (fs.existsSync(destPath)) {
       try {
         const stat = fs.statSync(destPath);
-        const elapsed = (Date.now() - startTime) / 1000;
-        const speed = elapsed > 0 ? (stat.size / (1024 * 1024) / elapsed).toFixed(1) + ' MB/s' : '0 MB/s';
+        const now = Date.now();
+        const deltaSeconds = (now - lastTime) / 1000;
+        const deltaBytes = stat.size - lastBytes;
+        lastBytes = stat.size;
+        lastTime = now;
+
+        const speed = (deltaSeconds > 0 && deltaBytes >= 0)
+          ? (deltaBytes / (1024 * 1024) / deltaSeconds).toFixed(1) + ' MB/s'
+          : '0 MB/s';
+
+        const percent = (item.sizeBytes && item.sizeBytes > 0)
+          ? Math.min(99, Math.round((stat.size / item.sizeBytes) * 100))
+          : 0;
+
         downloadInfo.downloadedFormatted = formatBytes(stat.size);
+        downloadInfo.totalFormatted = item.sizeBytes ? formatBytes(item.sizeBytes) : '';
+        downloadInfo.progress = percent;
         downloadInfo.speed = speed;
         mainWindow?.webContents.send('download-progress', { type: 'progress', info: downloadInfo });
       } catch (e) {}
@@ -462,54 +679,135 @@ ipcMain.handle('downloadHfFile', async (_event, { repoId, filename, downloadUrl 
   proc.on('close', (code) => {
     clearInterval(progressTimer);
     activeDownloadProcess = null;
+
     if (code === 0 && fs.existsSync(destPath)) {
       const stat = fs.statSync(destPath);
       downloadInfo.downloadedFormatted = formatBytes(stat.size);
-      mainWindow?.webContents.send('download-progress', { type: 'complete', info: downloadInfo });
+      downloadInfo.progress = 100;
+
+      // Auto-set configuration if requested
+      if (item.autoSelectModel) {
+        saveConfigSync({ selectedModel: destPath });
+      }
+      if (item.autoSelectMmproj) {
+        saveConfigSync({ selectedMmproj: destPath });
+      }
+
+      downloadQueue.shift(); // Remove completed item
+
+      if (downloadQueue.length > 0) {
+        mainWindow?.webContents.send('download-progress', {
+          type: 'item-complete',
+          info: downloadInfo,
+        });
+        startNextDownloadInQueue();
+      } else {
+        isDownloading = false;
+        mainWindow?.webContents.send('download-progress', {
+          type: 'complete',
+          info: downloadInfo,
+          bundleCompleted: Boolean(item.batchTotal && item.batchTotal > 1),
+        });
+      }
     } else {
-      mainWindow?.webContents.send('download-progress', { type: 'cancelled' });
+      console.error(`curl download exited with code ${code}. Stderr: ${stderrBuffer}`);
+      downloadQueue = [];
+      isDownloading = false;
+      const cleanErr = stderrBuffer.trim() || `Download process exited with code ${code}`;
+      mainWindow?.webContents.send('download-progress', { type: 'error', message: cleanErr });
     }
   });
+}
 
+ipcMain.handle('downloadHfFile', async (_event, { repoId, filename, downloadUrl, sizeBytes, autoSelectModel, autoSelectMmproj }) => {
+  downloadQueue.push({
+    repoId,
+    filename,
+    downloadUrl,
+    sizeBytes,
+    autoSelectModel,
+    autoSelectMmproj,
+    parentModelFilename: filename.split('/').pop(),
+    batchIndex: 1,
+    batchTotal: 1,
+  });
+  if (!isDownloading) {
+    startNextDownloadInQueue();
+  }
+  return { success: true };
+});
+
+ipcMain.handle('downloadHfBundle', async (_event, { files }) => {
+  if (!Array.isArray(files) || files.length === 0) return { success: false };
+  const total = files.length;
+  const parentModelFilename = files[0].filename.split('/').pop();
+  files.forEach((f, idx) => {
+    downloadQueue.push({
+      ...f,
+      parentModelFilename,
+      batchIndex: idx + 1,
+      batchTotal: total,
+    });
+  });
+  if (!isDownloading) {
+    startNextDownloadInQueue();
+  }
   return { success: true };
 });
 
 ipcMain.handle('cancelHfDownload', async () => {
+  downloadQueue = [];
   if (activeDownloadProcess) {
     try {
       exec(`taskkill /F /T /PID ${activeDownloadProcess.pid}`);
     } catch (e) {}
     activeDownloadProcess = null;
-    mainWindow?.webContents.send('download-progress', { type: 'cancelled' });
-    return { success: true };
   }
-  return { success: false };
+  isDownloading = false;
+  mainWindow?.webContents.send('download-progress', { type: 'cancelled' });
+  return { success: true };
 });
 
 ipcMain.handle('startServer', async (_event, configOverride) => {
   if (serverProcess) return { success: false, message: 'Server is already running' };
 
   const config = configOverride || loadConfig();
-  const binary = config.binaryPath || findDefaultBinary();
+  let binary = config.binaryPath || findDefaultBinary();
+  let resolvedBinary = path.isAbsolute(binary) ? binary : path.resolve(process.cwd(), binary);
+  if (!fs.existsSync(resolvedBinary)) {
+    resolvedBinary = findDefaultBinary();
+  }
+  if (!fs.existsSync(resolvedBinary)) {
+    const errMsg = `Inference engine binary not found at "${binary}". Please verify your installation in Settings.`;
+    addLog(errMsg);
+    throw new Error(errMsg);
+  }
 
   if (!config.selectedModel) {
     throw new Error('Please select a model in Model Manager before starting the server.');
   }
+
+  const nGl = config.nGl ?? config.nGpuLayers ?? 0;
+  const threads = config.threads ?? config.nThreads ?? 8;
 
   const args = [
     '-m', config.selectedModel,
     '--host', config.host || '127.0.0.1',
     '--port', String(config.port || 8080),
     '-c', String(config.ctxSize || 8192),
-    '-ngl', String(config.nGl ?? 0),
-    '-t', String(config.threads || 8),
+    '-ngl', String(nGl),
+    '-t', String(threads),
     '-b', String(config.batchSize || 512),
   ];
 
   if (config.uBatchSize) args.push('-ub', String(config.uBatchSize));
   if (config.cacheTypeK && config.cacheTypeK !== 'f16') args.push('-ctk', config.cacheTypeK);
   if (config.cacheTypeV && config.cacheTypeV !== 'f16') args.push('-ctv', config.cacheTypeV);
-  if (config.ctxShift) args.push('--ctx-shift');
+  if (config.ctxShift === false) {
+    args.push('--no-context-shift');
+  } else {
+    args.push('--context-shift');
+  }
   if (config.cacheReuse && Number(config.cacheReuse) > 0) args.push('--cache-reuse', String(config.cacheReuse));
   if (config.ropeScaling && config.ropeScaling !== 'none') {
     args.push('--rope-scaling', config.ropeScaling);
@@ -522,17 +820,30 @@ ipcMain.handle('startServer', async (_event, configOverride) => {
   if (config.jinja) args.push('--jinja');
   if (config.selectedMmproj && fs.existsSync(config.selectedMmproj)) {
     args.push('--mmproj', config.selectedMmproj);
+    if (!config.extraArgs || !config.extraArgs.includes('--image-min-tokens')) {
+      args.push('--image-min-tokens', '1024');
+    }
   }
   if (config.extraArgs && config.extraArgs.trim()) {
     args.push(...config.extraArgs.trim().split(/\s+/));
   }
 
   serverStatus.starting = true;
+  serverStatus.running = false;
   mainWindow?.webContents.send('server-status', serverStatus);
-  addLog(`=== Starting llama-server: ${binary} ${args.join(' ')} ===`);
+  addLog(`=== Starting llama-server: ${resolvedBinary} ${args.join(' ')} ===`);
 
   try {
-    const proc = spawn(binary, args, { windowsHide: true });
+    const binDir = path.dirname(resolvedBinary);
+    const env = { ...process.env };
+    const pathKey = process.platform === 'win32' ? 'Path' : 'PATH';
+    env[pathKey] = `${binDir}${path.delimiter}${env[pathKey] || ''}`;
+
+    const proc = spawn(resolvedBinary, args, {
+      cwd: binDir,
+      env,
+      windowsHide: true,
+    });
     serverProcess = proc;
 
     serverStatus.pid = proc.pid;
@@ -540,6 +851,14 @@ ipcMain.handle('startServer', async (_event, configOverride) => {
     serverStatus.port = config.port || 8080;
     serverStatus.model = path.basename(config.selectedModel);
     serverStatus.uptime = 0;
+
+    proc.on('error', (err) => {
+      addLog(`[Error] Failed to spawn llama-server: ${err.message}`);
+      serverProcess = null;
+      serverStatus.running = false;
+      serverStatus.starting = false;
+      mainWindow?.webContents.send('server-status', serverStatus);
+    });
 
     proc.stdout.on('data', (d) => {
       const lines = d.toString().split('\n');
@@ -557,11 +876,15 @@ ipcMain.handle('startServer', async (_event, configOverride) => {
       serverStatus.starting = false;
       serverStatus.uptime = 0;
       clearInterval(uptimeInterval);
-      addLog(`llama-server process exited (code ${code})`);
+      if (code !== 0 && code !== null) {
+        addLog(`llama-server process exited unexpectedly with code ${code}`);
+      } else {
+        addLog(`llama-server process stopped.`);
+      }
       mainWindow?.webContents.send('server-status', serverStatus);
     });
 
-    // Health Poll
+    // Health Poll (up to 120s to allow large 27B weights to load into RAM/VRAM)
     let checks = 0;
     const healthTimer = setInterval(async () => {
       checks++;
@@ -582,15 +905,18 @@ ipcMain.handle('startServer', async (_event, configOverride) => {
           }, 1000);
         }
       } catch (e) {
-        if (checks > 40 || !serverProcess) {
+        if (checks > 120 || !serverProcess) {
           clearInterval(healthTimer);
+          if (checks > 120) {
+            addLog(`[Timeout] Inference server failed to respond within 120s`);
+          }
           serverStatus.starting = false;
           mainWindow?.webContents.send('server-status', serverStatus);
         }
       }
     }, 1000);
 
-    return { success: true, pid: proc.pid };
+    return { success: true, pid: proc.pid, starting: true, running: false };
   } catch (e) {
     serverProcess = null;
     serverStatus.running = false;

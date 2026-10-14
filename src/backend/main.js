@@ -58,6 +58,40 @@ function addLog(text, level = 'info') {
   return line;
 }
 
+function formatBytes(bytes) {
+  if (!bytes || bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+function detectQuantType(filename) {
+  const f = filename.toUpperCase();
+  if (f.includes('MMPROJ')) return 'Vision Projector';
+  if (f.includes('PTQ1_0')) return 'Ternary (PTQ1_0)';
+  if (f.includes('PQ2_0') || f.includes('TERNARY-2')) return 'Ternary (PQ2_0)';
+  if (f.includes('Q1_0') || f.includes('1BIT') || f.includes('1-BIT') || f.includes('BITNET')) return '1-bit (Q1_0)';
+  if (f.includes('IQ1_S') || f.includes('IQ1_M')) return '1-bit (IQ1)';
+  if (f.includes('IQ2_XXS') || f.includes('IQ2_XS') || f.includes('IQ2_S') || f.includes('IQ2_M') || f.includes('Q2_K') || f.includes('Q2_0')) return '2-bit (Q2)';
+  if (f.includes('IQ3_XXS') || f.includes('IQ3_S') || f.includes('IQ3_M') || f.includes('Q3_K') || f.includes('Q3_0')) return '3-bit (Q3)';
+  if (f.includes('Q4_K_M')) return '4-bit (Q4_K_M)';
+  if (f.includes('Q4_K_S')) return '4-bit (Q4_K_S)';
+  if (f.includes('Q4_0')) return '4-bit (Q4_0)';
+  if (f.includes('Q4_1')) return '4-bit (Q4_1)';
+  if (f.includes('IQ4_NL') || f.includes('IQ4_XS')) return '4-bit (IQ4)';
+  if (f.includes('Q4_K')) return '4-bit (Q4_K)';
+  if (f.includes('Q5_K_M')) return '5-bit (Q5_K_M)';
+  if (f.includes('Q5_K_S')) return '5-bit (Q5_K_S)';
+  if (f.includes('Q5_0') || f.includes('Q5_1') || f.includes('Q5_K')) return '5-bit (Q5)';
+  if (f.includes('Q6_K')) return '6-bit (Q6_K)';
+  if (f.includes('Q8_0') || f.includes('Q8_K')) return '8-bit (Q8_0)';
+  if (f.includes('BF16')) return '16-bit (BF16)';
+  if (f.includes('F16') || f.includes('FP16')) return '16-bit (FP16)';
+  if (f.includes('F32') || f.includes('FP32')) return '32-bit (FP32)';
+  return 'GGUF Model';
+}
+
 async function fileExists(path) {
   try {
     const s = await tjs.stat(path);
@@ -444,25 +478,99 @@ export const api = {
 
   async getHfModelFiles({ repoId }) {
     try {
-      const url = `https://huggingface.co/api/models/${repoId}`;
-      const res = await fetch(url, { headers: { 'User-Agent': 'PrismBonsaiRunner' } });
-      const data = await res.json();
+      const config = await loadConfig();
+      const token = (config.hfToken || '').trim() || (typeof process !== 'undefined' && process.env && (process.env.HF_TOKEN || process.env.HUGGING_FACE_HUB_TOKEN)) || '';
       const files = [];
-      for (const s of data.siblings || []) {
-        if (s.rfilename.toLowerCase().endsWith('.gguf')) {
-          const cleanName = s.rfilename.split('/').pop();
-          files.push({
-            name: cleanName,
-            filename: cleanName,
-            path: s.rfilename,
-            repoId,
-            quant: detectQuantType(s.rfilename),
-            isMmproj: s.rfilename.toLowerCase().includes('mmproj'),
-            sizeFormatted: s.size ? formatBytes(s.size) : 'GGUF',
-            downloadUrl: `https://huggingface.co/${repoId}/resolve/main/${s.rfilename}`,
-          });
+      const headers = { 'User-Agent': 'PrismBonsaiRunner' };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      // 1. Fetch siblings with blob sizes
+      let data = null;
+      try {
+        const url = `https://huggingface.co/api/models/${repoId}?blobs=true`;
+        const res = await fetch(url, { headers });
+        if (res.ok) data = await res.json();
+      } catch (e) {}
+
+      if (data && Array.isArray(data.siblings) && data.siblings.length > 0) {
+        for (const s of data.siblings) {
+          const lower = (s.rfilename || '').toLowerCase();
+          if (lower.endsWith('.gguf') || lower.endsWith('.mmproj')) {
+            const cleanName = s.rfilename.split('/').pop();
+            const sizeBytes = (s.lfs && typeof s.lfs.size === 'number' && s.lfs.size > 0)
+              ? s.lfs.size
+              : (typeof s.size === 'number' ? s.size : 0);
+
+            files.push({
+              name: cleanName,
+              filename: cleanName,
+              path: s.rfilename,
+              repoId,
+              quant: detectQuantType(cleanName),
+              isMmproj: lower.includes('mmproj'),
+              sizeBytes,
+              sizeFormatted: sizeBytes > 0 ? formatBytes(sizeBytes) : 'Unknown size',
+              downloadUrl: `https://huggingface.co/${repoId}/resolve/main/${s.rfilename}`,
+            });
+          }
         }
       }
+
+      // 2. Fallback to tree API if needed
+      if (files.length === 0 || files.some(f => f.sizeBytes === 0)) {
+        try {
+          const treeRes = await fetch(`https://huggingface.co/api/models/${repoId}/tree/main?recursive=true`, { headers });
+          if (treeRes.ok) {
+            const treeData = await treeRes.json();
+            if (Array.isArray(treeData)) {
+              const sizeMap = new Map();
+              for (const item of treeData) {
+                if (item.type === 'file' && item.path) {
+                  const sBytes = (item.lfs && typeof item.lfs.size === 'number' && item.lfs.size > 0)
+                    ? item.lfs.size
+                    : (typeof item.size === 'number' ? item.size : 0);
+                  sizeMap.set(item.path, sBytes);
+                }
+              }
+
+              if (files.length === 0) {
+                for (const [filePath, sBytes] of sizeMap.entries()) {
+                  const lower = filePath.toLowerCase();
+                  if (lower.endsWith('.gguf') || lower.endsWith('.mmproj')) {
+                    const cleanName = filePath.split('/').pop();
+                    files.push({
+                      name: cleanName,
+                      filename: cleanName,
+                      path: filePath,
+                      repoId,
+                      quant: detectQuantType(cleanName),
+                      isMmproj: lower.includes('mmproj'),
+                      sizeBytes: sBytes,
+                      sizeFormatted: sBytes > 0 ? formatBytes(sBytes) : 'Unknown size',
+                      downloadUrl: `https://huggingface.co/${repoId}/resolve/main/${filePath}`,
+                    });
+                  }
+                }
+              } else {
+                for (const f of files) {
+                  if (f.sizeBytes === 0 && sizeMap.has(f.path)) {
+                    f.sizeBytes = sizeMap.get(f.path);
+                    if (f.sizeBytes > 0) f.sizeFormatted = formatBytes(f.sizeBytes);
+                  }
+                }
+              }
+            }
+          }
+        } catch (e) {}
+      }
+
+      files.sort((a, b) => {
+        if (a.isMmproj !== b.isMmproj) return a.isMmproj ? 1 : -1;
+        return (b.sizeBytes || 0) - (a.sizeBytes || 0);
+      });
+
       return files;
     } catch (e) {
       throw new Error('Failed to fetch files for repository ' + repoId + ': ' + e.message);
@@ -498,10 +606,13 @@ export const api = {
       info: activeDownloadInfo
     });
 
+    const token = (config.hfToken || '').trim() || (typeof process !== 'undefined' && process.env && (process.env.HF_TOKEN || process.env.HUGGING_FACE_HUB_TOKEN)) || '';
+    const authHeader = token ? `-H "Authorization: Bearer ${token}" ` : '';
+
     const script = `
       $url = "${downloadUrl}"
       $dest = "${destPath.replace(/\//g, '\\')}"
-      curl.exe -# -L -o "$dest" "$url"
+      curl.exe -# -L -C - -A "Mozilla/5.0" --connect-timeout 30 --keepalive-time 15 --speed-limit 1024 --speed-time 25 --retry 8 --retry-delay 2 --retry-all-errors ${authHeader}-o "$dest" "$url"
     `;
 
     try {

@@ -19,7 +19,7 @@ export const UNIFIED_PRESETS = [
     shortName: 'Max Context',
     desc: '75% KV VRAM savings. Enables 32K–256K massive context on consumer GPUs.',
     badge: 'Max Context',
-    badgeColor: 'badge-secondary',
+    badgeColor: 'badge-info',
     kvType: 'Q4_0',
     ctxTarget: '64K–256K',
   },
@@ -44,6 +44,14 @@ export const UNIFIED_PRESETS = [
     ctxTarget: '128K+',
   },
 ];
+
+function formatBytes(bytes) {
+  if (!bytes || bytes <= 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
 
 export function AppProvider({ children }) {
   const [activeTab, setActiveTab] = useState('runner');
@@ -148,26 +156,66 @@ export function AppProvider({ children }) {
 
       window.tiny.api.on('download-progress', (event) => {
         if (!event) return;
+        const info = event.info || {};
+        const isBatch = info.batchTotal > 1;
+        const prefix = isBatch ? `[Part ${info.batchIndex}/${info.batchTotal}] ` : '';
+
+        const totalPart = info.totalFormatted ? ` of ${info.totalFormatted}` : '';
+
         if (event.type === 'start') {
-          setDownloadInfo({ filename: event.info.filename, progress: 10, meta: 'Starting download...' });
+          setDownloadInfo({
+            filename: info.filename,
+            progress: 5,
+            meta: `${prefix}Connecting & starting download...`,
+            speed: 'Connecting...',
+            downloadedFormatted: '0 B',
+            totalFormatted: info.totalFormatted || '',
+            batchIndex: info.batchIndex,
+            batchTotal: info.batchTotal,
+          });
         } else if (event.type === 'progress') {
           setDownloadInfo({
-            filename: event.info.filename,
-            progress: 50,
-            meta: `${event.info.downloadedFormatted} · ${event.info.speed}`,
+            filename: info.filename,
+            progress: info.progress || 0,
+            meta: `${prefix}${info.downloadedFormatted}${totalPart} (${info.progress || 0}%) · ${info.speed}`,
+            speed: info.speed,
+            downloadedFormatted: info.downloadedFormatted,
+            totalFormatted: info.totalFormatted || '',
+            batchIndex: info.batchIndex,
+            batchTotal: info.batchTotal,
           });
+        } else if (event.type === 'item-complete') {
+          setDownloadInfo({
+            filename: info.filename,
+            progress: 100,
+            meta: `${prefix}Finished! Moving to next part...`,
+            batchIndex: info.batchIndex,
+            batchTotal: info.batchTotal,
+          });
+          refreshLocalModels();
         } else if (event.type === 'complete') {
           setDownloadInfo({
-            filename: event.info.filename,
+            filename: info.filename,
             progress: 100,
-            meta: `Completed (${event.info.downloadedFormatted})!`,
+            meta: `All downloads complete (${info.downloadedFormatted})!`,
+            batchIndex: info.batchIndex,
+            batchTotal: info.batchTotal,
           });
-          setTimeout(() => setDownloadInfo(null), 2500);
+          setTimeout(() => setDownloadInfo(null), 3500);
           refreshLocalModels();
           if (window.tiny.dialog) {
-            window.tiny.dialog.alert('Download Finished', `Model ${event.info.filename} is downloaded and ready!`);
+            const title = event.bundleCompleted ? 'Model & Vision Bundle Ready' : 'Download Complete';
+            const msg = event.bundleCompleted
+              ? `Both the model and matching vision projector have been downloaded and automatically configured!`
+              : `Model ${info.filename} has finished downloading and is ready to use!`;
+            window.tiny.dialog.alert(title, msg);
           }
-        } else if (event.type === 'cancelled' || event.type === 'error') {
+        } else if (event.type === 'error') {
+          setDownloadInfo(null);
+          if (window.tiny && window.tiny.dialog) {
+            window.tiny.dialog.alert('Download Failed', event.message || 'The download failed to start or was interrupted.');
+          }
+        } else if (event.type === 'cancelled') {
           setDownloadInfo(null);
         }
       });
@@ -200,10 +248,18 @@ export function AppProvider({ children }) {
       window.tiny.dialog.alert('No Model Selected', 'Please select a .gguf model in Model Manager before starting the inference server.');
       return;
     }
-    setServerStatus(prev => ({ ...prev, starting: true }));
+    setServerStatus(prev => ({ ...prev, starting: true, running: false }));
     try {
       const res = await window.tiny.api.call('startServer', config);
-      setServerStatus(prev => ({ ...prev, ...res, starting: false }));
+      if (res && res.error) {
+        window.tiny.dialog.alert('Failed to Start Server', res.error);
+        setServerStatus(prev => ({ ...prev, running: false, starting: false }));
+      } else if (res && res.message && !res.success) {
+        window.tiny.dialog.alert('Server Notice', res.message);
+        setServerStatus(prev => ({ ...prev, starting: false }));
+      } else {
+        setServerStatus(prev => ({ ...prev, ...res, starting: true }));
+      }
     } catch (e) {
       window.tiny.dialog.alert('Failed to Start Server', e.message);
       setServerStatus(prev => ({ ...prev, running: false, starting: false }));
@@ -245,7 +301,16 @@ export function AppProvider({ children }) {
   }
 
   async function selectMmproj(filePath) {
-    await saveConfig({ selectedMmproj: filePath });
+    const next = config.selectedMmproj === filePath ? '' : filePath;
+    await saveConfig({ selectedMmproj: next });
+    refreshLocalModels();
+  }
+
+  async function activateModelBundle(modelPath, mmprojPath = '') {
+    await saveConfig({
+      selectedModel: modelPath,
+      selectedMmproj: mmprojPath || '',
+    });
     refreshLocalModels();
   }
 
@@ -269,6 +334,17 @@ export function AppProvider({ children }) {
     }
   }
 
+  async function openExternalUrl(url) {
+    if (!url) return;
+    if (typeof window.tiny !== 'undefined' && window.tiny.api) {
+      try {
+        await window.tiny.api.call('openExternalUrl', { url });
+        return;
+      } catch (e) {}
+    }
+    window.open(url, '_blank');
+  }
+
   async function openRepoModal(repoId) {
     setModalRepo(repoId);
     setIsModalLoading(true);
@@ -288,12 +364,119 @@ export function AppProvider({ children }) {
     setModalFiles([]);
   }
 
-  async function downloadHfFile(repoId, filename, downloadUrl) {
-    closeRepoModal();
+  async function downloadHfFile(repoId, filename, downloadUrl, sizeBytes) {
+    if (!filename) return;
+    const cleanFilename = filename.split('/').pop();
+
+    setDownloadInfo({
+      filename: cleanFilename,
+      progress: 2,
+      meta: `Connecting & downloading ${cleanFilename}...`,
+      speed: 'Connecting...',
+      downloadedFormatted: '0 B',
+      totalFormatted: sizeBytes ? formatBytes(sizeBytes) : '',
+      batchIndex: 1,
+      batchTotal: 1,
+    });
+
     try {
-      await window.tiny.api.call('downloadHfFile', { repoId, filename, downloadUrl });
+      await window.tiny.api.call('downloadHfFile', { 
+        repoId, 
+        filename, 
+        downloadUrl,
+        sizeBytes: sizeBytes || 0,
+        autoSelectModel: !cleanFilename.toLowerCase().includes('mmproj'),
+        autoSelectMmproj: cleanFilename.toLowerCase().includes('mmproj'),
+      });
     } catch (e) {
-      window.tiny.dialog.alert('Download Error', e.message);
+      console.error('downloadHfFile error:', e);
+      setDownloadInfo(null);
+      if (typeof window.tiny !== 'undefined' && window.tiny.dialog) {
+        window.tiny.dialog.alert('Download Error', e.message);
+      } else {
+        alert('Download Error: ' + e.message);
+      }
+    }
+  }
+
+  async function downloadHfBundle(repoId, modelFile, visionFile) {
+    if (!modelFile) return;
+    const cleanModelName = modelFile.filename.split('/').pop();
+
+    // Instant optimistic state so the user immediately sees the download starting
+    setDownloadInfo({
+      filename: cleanModelName,
+      parentModelFilename: cleanModelName,
+      progress: 2,
+      meta: visionFile 
+        ? `[Part 1/2] Connecting & downloading ${cleanModelName}...`
+        : `Connecting & downloading ${cleanModelName}...`,
+      speed: 'Connecting...',
+      downloadedFormatted: '0 B',
+      totalFormatted: modelFile.sizeFormatted || (modelFile.sizeBytes ? formatBytes(modelFile.sizeBytes) : ''),
+      batchIndex: 1,
+      batchTotal: visionFile ? 2 : 1,
+      isVisionBundle: Boolean(visionFile),
+    });
+
+    let bundleCallSuccess = false;
+    if (typeof window.tiny !== 'undefined' && window.tiny.api) {
+      try {
+        const res = await window.tiny.api.call('downloadHfBundle', {
+          files: [
+            {
+              repoId,
+              filename: modelFile.filename,
+              downloadUrl: modelFile.downloadUrl,
+              sizeBytes: modelFile.sizeBytes || 0,
+              autoSelectModel: true,
+            },
+            ...(visionFile ? [{
+              repoId,
+              filename: visionFile.filename,
+              downloadUrl: visionFile.downloadUrl,
+              sizeBytes: visionFile.sizeBytes || 0,
+              autoSelectMmproj: true,
+            }] : []),
+          ],
+        });
+        if (res && res.success) {
+          bundleCallSuccess = true;
+        }
+      } catch (err) {
+        console.warn('downloadHfBundle IPC not registered or failed, falling back to sequential queue:', err);
+      }
+    }
+
+    if (!bundleCallSuccess) {
+      // Fallback: trigger sequential downloadHfFile calls
+      try {
+        await window.tiny.api.call('downloadHfFile', {
+          repoId,
+          filename: modelFile.filename,
+          downloadUrl: modelFile.downloadUrl,
+          sizeBytes: modelFile.sizeBytes || 0,
+          autoSelectModel: true,
+        });
+
+        if (visionFile) {
+          await window.tiny.api.call('downloadHfFile', {
+            repoId,
+            filename: visionFile.filename,
+            downloadUrl: visionFile.downloadUrl,
+            sizeBytes: visionFile.sizeBytes || 0,
+            autoSelectMmproj: true,
+          });
+        }
+      } catch (fallbackErr) {
+        console.error('Fallback download failed:', fallbackErr);
+        setDownloadInfo(null);
+        if (typeof window.tiny !== 'undefined' && window.tiny.dialog) {
+          window.tiny.dialog.alert('Download Failed', fallbackErr.message);
+        } else {
+          alert('Download Failed: ' + fallbackErr.message);
+        }
+      }
     }
   }
 
@@ -405,13 +588,16 @@ export function AppProvider({ children }) {
       saveConfig,
       selectModel,
       selectMmproj,
+      activateModelBundle,
       deleteModel,
       openInExplorer,
+      openExternalUrl,
       refreshLocalModels,
       searchHub,
       openRepoModal,
       closeRepoModal,
       downloadHfFile,
+      downloadHfBundle,
       cancelDownload,
       clearLogs,
     }}>

@@ -17,7 +17,10 @@ import {
   Zap,
   Check,
   ExternalLink,
-  ShieldCheck
+  ShieldCheck,
+  KeyRound,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
 export default function Settings() {
@@ -33,8 +36,10 @@ export default function Settings() {
     uBatchSize: config.uBatchSize || 512,
     modelsDir: config.modelsDir || 'models',
     extraArgs: config.extraArgs || '',
+    hfToken: config.hfToken || '',
   });
 
+  const [showHfToken, setShowHfToken] = useState(false);
   const [releases, setReleases] = useState(null);
   const [isLoadingReleases, setIsLoadingReleases] = useState(false);
   const [installingAsset, setInstallingAsset] = useState(null);
@@ -62,6 +67,7 @@ export default function Settings() {
       uBatchSize: config.uBatchSize || 512,
       modelsDir: config.modelsDir || 'models',
       extraArgs: config.extraArgs || '',
+      hfToken: config.hfToken || '',
     });
   }, [config]);
 
@@ -564,6 +570,99 @@ export default function Settings() {
 
           </div>
         </form>
+
+      </section>
+
+      {/* SECTION 3: Hugging Face Authentication & Gated Models */}
+      <section className="space-y-4">
+        
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-2 border-b border-base-300">
+          <div className="flex items-center gap-2.5">
+            <KeyRound className="w-5 h-5 text-primary" />
+            <div>
+              <h2 className="font-bold text-base text-white tracking-wide">Hugging Face Authentication</h2>
+              <p className="text-xs text-base-content/70">
+                Configure your Hugging Face User Access Token for gated models (e.g. Meta-Llama, Gemma, Mistral) and private weights.
+              </p>
+            </div>
+          </div>
+
+          <a
+            href="https://huggingface.co/settings/tokens"
+            target="_blank"
+            rel="noreferrer"
+            className="btn btn-ghost btn-xs text-sky-400 hover:text-sky-300 gap-1 font-mono"
+            title="Create or manage your Hugging Face Access Tokens"
+          >
+            <span>Get HF Token</span>
+            <ExternalLink className="w-3 h-3" />
+          </a>
+        </div>
+
+        <div className="card bg-base-200 border border-base-300 shadow-md">
+          <div className="card-body p-6 space-y-4">
+            
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-white flex items-center gap-2">
+                  <span>User Access Token (HF_TOKEN)</span>
+                  {form.hfToken ? (
+                    <span className="badge badge-success badge-xs font-mono text-2xs text-black font-bold gap-1">
+                      <Check className="w-2.5 h-2.5" />
+                      Token Configured
+                    </span>
+                  ) : (
+                    <span className="badge badge-neutral badge-xs font-mono text-2xs text-zinc-400">
+                      Anonymous Access
+                    </span>
+                  )}
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowHfToken(!showHfToken)}
+                  className="btn btn-ghost btn-2xs text-zinc-400 hover:text-white gap-1"
+                >
+                  {showHfToken ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                  <span>{showHfToken ? 'Hide Token' : 'Reveal Token'}</span>
+                </button>
+              </div>
+
+              <div className="relative">
+                <input
+                  type={showHfToken ? 'text' : 'password'}
+                  placeholder="hf_..."
+                  value={form.hfToken}
+                  onChange={(e) => setForm({ ...form, hfToken: e.target.value.trim() })}
+                  className="input input-bordered input-sm w-full font-mono text-xs bg-base-100 pr-10"
+                />
+              </div>
+
+              <div className="text-2xs font-mono text-base-content/60 leading-relaxed space-y-1">
+                <p>
+                  • Stored locally in your <code className="text-sky-300">runner-config.json</code> file.
+                </p>
+                <p>
+                  • Automatically injected as <code className="text-sky-300">Authorization: Bearer &lt;token&gt;</code> into Hugging Face API queries and multi-gigabyte <code className="text-sky-300">curl.exe</code> model downloads.
+                </p>
+                <p>
+                  • You can also define the <code className="text-sky-300">HF_TOKEN</code> or <code className="text-sky-300">HUGGING_FACE_HUB_TOKEN</code> environment variable in your OS.
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button 
+                type="button" 
+                onClick={handleSaveForm} 
+                className="btn btn-primary btn-sm gap-2 font-bold shadow-md"
+              >
+                <Save className="w-4 h-4" />
+                <span>Save HF Token</span>
+              </button>
+            </div>
+
+          </div>
+        </div>
 
       </section>
 
