@@ -70,6 +70,13 @@ Built with **Electron**, **React 19**, **Vite**, **Tailwind CSS 4**, and **daisy
   - **Vulkan** (Cross-GPU acceleration)
   - **CPU (AVX2/Zen4)**
 
+### 7. 🌐 Network & LAN Access (Multi-Node Sharing)
+- **Top Bar LAN Toggle**: Dedicated switch in the top header toggling between **Local Only** (`127.0.0.1`) and **LAN Mode** (`0.0.0.0`) with automatic server restart.
+- **Auto LAN IP Discovery**: Automatically resolves the host machine's active IPv4 network interface.
+- **Click-to-Copy LAN Endpoint**: Click the network pill in the top bar to instantly copy the remote OpenAI API URL (`http://<LAN-IP>:<PORT>/v1`).
+- **Port 9931 & 8080 Presets**: Quick-select buttons in Settings for standard `8080` and upcoming default port `9931`.
+- **Windows Client Normalization**: Transparently redirects in-app playground and health queries to loopback when bound to `0.0.0.0`, eliminating Windows `WSAEADDRNOTAVAIL` socket errors.
+
 ---
 
 ## 🛠️ Technology Stack
@@ -113,14 +120,50 @@ Built with **Electron**, **React 19**, **Vite**, **Tailwind CSS 4**, and **daisy
 
 ---
 
+## 🌐 Accessing from Other Nodes on Your Network
+
+To access the inference engine from other PCs, laptops, mobile devices, or servers on your local network (LAN):
+
+### 1. Enable LAN Mode
+- Click the **LAN Mode** toggle switch in the top navigation bar (or choose **0.0.0.0 (LAN)** in **Settings** > **Server Parameters**).
+- If the server is running, it will automatically restart and bind to `0.0.0.0`.
+
+### 2. Configure Port (8080 or 9931)
+- In **Settings** > **Server Parameters**, use the quick preset buttons to select:
+  - **`8080 (Standard)`**: Traditional default port for llama.cpp instances.
+  - **`9931 (Next Default)`**: Dedicated port standardized for upcoming Prism releases.
+
+### 3. Open Windows Defender Firewall
+Run PowerShell as Administrator to allow inbound connections on your chosen port:
+
+```powershell
+# For Port 8080:
+New-NetFirewallRule -DisplayName "Prism Llama Server (8080)" -Direction Inbound -LocalPort 8080 -Protocol TCP -Action Allow
+
+# For Port 9931 (Upcoming default):
+New-NetFirewallRule -DisplayName "Prism Llama Server (9931)" -Direction Inbound -LocalPort 9931 -Protocol TCP -Action Allow
+```
+
+### 4. Connect from Remote Nodes
+Click the LAN address pill in the top navbar to copy your endpoint, or use the URLs below from any device on your LAN:
+
+| Purpose | URL Format | Example |
+|---|---|---|
+| **OpenAI API Base** | `http://<LAN-IP>:<PORT>/v1` | `http://192.168.5.101:9931/v1` |
+| **Chat Completions** | `http://<LAN-IP>:<PORT>/v1/chat/completions` | `http://192.168.5.101:9931/v1/chat/completions` |
+| **Web UI** | `http://<LAN-IP>:<PORT>/` | `http://192.168.5.101:9931/` |
+| **Health Check** | `http://<LAN-IP>:<PORT>/health` | `http://192.168.5.101:9931/health` |
+
+---
+
 ## ⚙️ Configuration
 
 Settings and server states are persisted in `runner-config.json` at the root directory:
 
 ```json
 {
-  "host": "127.0.0.1",
-  "port": 8080,
+  "host": "0.0.0.0",
+  "port": 9931,
   "ctxSize": 16384,
   "nGl": 28,
   "threads": 8,

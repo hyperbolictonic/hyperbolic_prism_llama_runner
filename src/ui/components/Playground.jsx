@@ -152,7 +152,8 @@ export default function Playground() {
     setTps(null);
     setTokensCount(0);
 
-    const host = serverStatus.host || config.host || '127.0.0.1';
+    const rawHost = serverStatus.host || config.host || '127.0.0.1';
+    const host = rawHost === '0.0.0.0' ? '127.0.0.1' : rawHost;
     const port = serverStatus.port || config.port || 8080;
     const endpoint = `http://${host}:${port}/v1/chat/completions`;
 

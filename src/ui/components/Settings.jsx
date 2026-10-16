@@ -443,28 +443,72 @@ export default function Settings() {
               
               {/* Host */}
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-base-content/80">
-                  Bind Host (--host)
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-base-content/80">
+                    Bind Host (--host)
+                  </label>
+                  <div className="flex items-center gap-1 text-2xs font-mono">
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, host: '127.0.0.1' })}
+                      className={`btn btn-2xs ${form.host === '127.0.0.1' ? 'btn-primary' : 'btn-neutral'}`}
+                    >
+                      127.0.0.1 (Local)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, host: '0.0.0.0' })}
+                      className={`btn btn-2xs ${form.host === '0.0.0.0' ? 'btn-primary' : 'btn-neutral'}`}
+                    >
+                      0.0.0.0 (LAN)
+                    </button>
+                  </div>
+                </div>
                 <input
                   type="text"
                   value={form.host}
                   onChange={(e) => setForm({ ...form, host: e.target.value })}
+                  placeholder="127.0.0.1 or 0.0.0.0"
                   className="input input-bordered input-sm w-full font-mono text-xs bg-base-100"
                 />
+                <p className="text-2xs text-base-content/50 font-mono">
+                  Use <span className="text-sky-300">127.0.0.1</span> for local machine only, or <span className="text-sky-300">0.0.0.0</span> to allow other nodes on your network to connect.
+                </p>
               </div>
 
               {/* Port */}
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-base-content/80">
-                  Port (--port)
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-base-content/80">
+                    Port (--port)
+                  </label>
+                  <div className="flex items-center gap-1 text-2xs font-mono">
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, port: 8080 })}
+                      className={`btn btn-2xs ${form.port === 8080 ? 'btn-primary' : 'btn-neutral'}`}
+                    >
+                      8080 (Standard)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, port: 9931 })}
+                      className={`btn btn-2xs ${form.port === 9931 ? 'btn-primary' : 'btn-neutral'}`}
+                      title="Set port to 9931 (future default)"
+                    >
+                      9931 (Next Default)
+                    </button>
+                  </div>
+                </div>
                 <input
                   type="number"
                   value={form.port}
                   onChange={(e) => setForm({ ...form, port: parseInt(e.target.value, 10) || 8080 })}
                   className="input input-bordered input-sm w-full font-mono text-xs bg-base-100"
                 />
+                <p className="text-2xs text-base-content/50 font-mono">
+                  Default llama.cpp port is <span className="text-sky-300">8080</span>. Click <span className="text-sky-300">9931</span> to switch to the upcoming default port.
+                </p>
               </div>
 
               {/* Batching Pipeline (-b and -ub) */}

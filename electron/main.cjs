@@ -274,11 +274,37 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
+function getLocalNetworkIp() {
+  try {
+    const nets = os.networkInterfaces();
+    for (const name of Object.keys(nets)) {
+      for (const net of nets[name]) {
+        if (net.family === 'IPv4' && !net.internal) {
+          if (net.address.startsWith('192.168.') || net.address.startsWith('10.') || /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(net.address)) {
+            if (!net.address.startsWith('192.168.56.')) {
+              return net.address;
+            }
+          }
+        }
+      }
+    }
+    for (const name of Object.keys(nets)) {
+      for (const net of nets[name]) {
+        if (net.family === 'IPv4' && !net.internal) {
+          return net.address;
+        }
+      }
+    }
+  } catch (e) {}
+  return '127.0.0.1';
+}
+
 // Register IPC Handlers
 ipcMain.handle('getSystemInfo', async () => {
   const cpus = os.cpus();
   const cpuModel = cpus.length > 0 ? cpus[0].model : 'CPU';
   const cpuCores = cpus.length;
+  const localIp = getLocalNetworkIp();
 
   let gpus = [];
   if (process.platform === 'win32') {
@@ -294,7 +320,7 @@ ipcMain.handle('getSystemInfo', async () => {
       }
     } catch (e) {}
   }
-  return { cpuModel, cpuCores, gpus };
+  return { cpuModel, cpuCores, gpus, localIp };
 });
 
 ipcMain.handle('getConfig', async () => {
@@ -889,7 +915,8 @@ ipcMain.handle('startServer', async (_event, configOverride) => {
     const healthTimer = setInterval(async () => {
       checks++;
       try {
-        const res = await fetch(`http://${serverStatus.host}:${serverStatus.port}/health`, { signal: AbortSignal.timeout(1000) });
+        const checkHost = serverStatus.host === '0.0.0.0' ? '127.0.0.1' : (serverStatus.host || '127.0.0.1');
+        const res = await fetch(`http://${checkHost}:${serverStatus.port}/health`, { signal: AbortSignal.timeout(1000) });
         if (res.ok) {
           clearInterval(healthTimer);
           serverStatus.running = true;

@@ -59,7 +59,8 @@ export default function Dashboard() {
   };
 
   const handleCopyEndpoint = () => {
-    const host = serverStatus.host || config.host || '127.0.0.1';
+    const rawHost = serverStatus.host || config.host || '127.0.0.1';
+    const host = (rawHost === '0.0.0.0') ? (systemInfo?.localIp || '127.0.0.1') : rawHost;
     const port = serverStatus.port || config.port || 8080;
     const url = `http://${host}:${port}/v1`;
     navigator.clipboard.writeText(url);
@@ -68,13 +69,15 @@ export default function Dashboard() {
   };
 
   const handleOpenBrowser = () => {
-    const host = serverStatus.host || config.host || '127.0.0.1';
+    const rawHost = serverStatus.host || config.host || '127.0.0.1';
+    const host = (rawHost === '0.0.0.0') ? '127.0.0.1' : rawHost;
     const port = serverStatus.port || config.port || 8080;
     window.open(`http://${host}:${port}`, '_blank');
   };
 
   const handleTestHealth = async () => {
-    const host = serverStatus.host || config.host || '127.0.0.1';
+    const rawHost = serverStatus.host || config.host || '127.0.0.1';
+    const host = (rawHost === '0.0.0.0') ? '127.0.0.1' : rawHost;
     const port = serverStatus.port || config.port || 8080;
     try {
       const res = await fetch(`http://${host}:${port}/health`);
@@ -167,8 +170,13 @@ export default function Dashboard() {
           <div className="stats stats-horizontal bg-base-300/40 border border-base-300 mt-4 rounded-lg w-full text-xs">
             <div className="stat py-3 px-4">
               <div className="stat-title text-2xs uppercase tracking-wider text-base-content/60">Host &amp; Port</div>
-              <div className="stat-value text-sm font-mono text-white mt-0.5">
-                {serverStatus.host || config.host}:{serverStatus.port || config.port}
+              <div className="stat-value text-sm font-mono text-white mt-0.5 flex flex-wrap items-center gap-1.5">
+                <span>{serverStatus.host || config.host}:{serverStatus.port || config.port}</span>
+                {(serverStatus.host === '0.0.0.0' || config.host === '0.0.0.0') && (
+                  <span className="badge badge-primary badge-outline badge-xs font-mono text-2xs" title={`Accessible on local network via http://${systemInfo?.localIp || '127.0.0.1'}:${serverStatus.port || config.port}`}>
+                    LAN: {systemInfo?.localIp || '127.0.0.1'}
+                  </span>
+                )}
               </div>
             </div>
             <div className="stat py-3 px-4">

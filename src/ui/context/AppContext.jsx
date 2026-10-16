@@ -79,7 +79,7 @@ export function AppProvider({ children }) {
     extraArgs: '',
   });
 
-  const [systemInfo, setSystemInfo] = useState({ cpuModel: '', cpuCores: 8, gpus: [] });
+  const [systemInfo, setSystemInfo] = useState({ cpuModel: '', cpuCores: 8, gpus: [], localIp: '127.0.0.1' });
   const [serverStatus, setServerStatus] = useState({
     running: false,
     starting: false,
@@ -565,6 +565,15 @@ export function AppProvider({ children }) {
     }
   }
 
+  async function toggleNetworkAccess() {
+    const isCurrentlyLan = (config.host === '0.0.0.0');
+    const targetHost = isCurrentlyLan ? '127.0.0.1' : '0.0.0.0';
+    await saveConfig({ host: targetHost });
+    if (serverStatus.running) {
+      await restartServer();
+    }
+  }
+
   return (
     <AppContext.Provider value={{
       activeTab,
@@ -600,6 +609,7 @@ export function AppProvider({ children }) {
       downloadHfBundle,
       cancelDownload,
       clearLogs,
+      toggleNetworkAccess,
     }}>
       {children}
     </AppContext.Provider>
