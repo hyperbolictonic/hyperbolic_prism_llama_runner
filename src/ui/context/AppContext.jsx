@@ -242,15 +242,16 @@ export function AppProvider({ children }) {
     }
   }
 
-  async function startServer() {
+  async function startServer(overrideConfig = null) {
     if (typeof window.tiny === 'undefined') return;
-    if (!config.selectedModel) {
+    const cfg = overrideConfig || config;
+    if (!cfg.selectedModel) {
       window.tiny.dialog.alert('No Model Selected', 'Please select a .gguf model in Model Manager before starting the inference server.');
       return;
     }
     setServerStatus(prev => ({ ...prev, starting: true, running: false }));
     try {
-      const res = await window.tiny.api.call('startServer', config);
+      const res = await window.tiny.api.call('startServer', cfg);
       if (res && res.error) {
         window.tiny.dialog.alert('Failed to Start Server', res.error);
         setServerStatus(prev => ({ ...prev, running: false, starting: false }));
@@ -276,9 +277,9 @@ export function AppProvider({ children }) {
     }
   }
 
-  async function restartServer() {
+  async function restartServer(overrideConfig = null) {
     await stopServer();
-    setTimeout(() => startServer(), 600);
+    setTimeout(() => startServer(overrideConfig), 800);
   }
 
   async function saveConfig(updates) {
@@ -568,9 +569,19 @@ export function AppProvider({ children }) {
   async function toggleNetworkAccess() {
     const isCurrentlyLan = (config.host === '0.0.0.0');
     const targetHost = isCurrentlyLan ? '127.0.0.1' : '0.0.0.0';
+    const next = { ...config, host: targetHost };
     await saveConfig({ host: targetHost });
     if (serverStatus.running) {
-      await restartServer();
+      await restartServer(next);
+    }
+  }
+
+  async function setServerPort(portInput) {
+    const targetPort = parseInt(portInput, 10) || 8080;
+    const next = { ...config, port: targetPort };
+    await saveConfig({ port: targetPort });
+    if (serverStatus.running) {
+      await restartServer(next);
     }
   }
 
@@ -610,6 +621,7 @@ export function AppProvider({ children }) {
       cancelDownload,
       clearLogs,
       toggleNetworkAccess,
+      setServerPort,
     }}>
       {children}
     </AppContext.Provider>

@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 
 export default function Settings() {
-  const { config, saveConfig, systemInfo } = useApp();
+  const { config, saveConfig, systemInfo, serverStatus, restartServer } = useApp();
 
   const [form, setForm] = useState({
     host: config.host || '127.0.0.1',
@@ -186,8 +186,13 @@ export default function Settings() {
   const handleSaveForm = async (e) => {
     e.preventDefault();
     await saveConfig(form);
-    setSaveMessage('Configuration saved successfully.');
-    setTimeout(() => setSaveMessage(null), 3000);
+    if (serverStatus.running) {
+      setSaveMessage('Configuration saved. Restarting inference server on new parameters...');
+      await restartServer(form);
+    } else {
+      setSaveMessage('Configuration saved successfully.');
+    }
+    setTimeout(() => setSaveMessage(null), 3500);
   };
 
   return (
@@ -450,14 +455,36 @@ export default function Settings() {
                   <div className="flex items-center gap-1 text-2xs font-mono">
                     <button
                       type="button"
-                      onClick={() => setForm({ ...form, host: '127.0.0.1' })}
+                      onClick={async () => {
+                        setForm(prev => ({ ...prev, host: '127.0.0.1' }));
+                        const next = { ...form, host: '127.0.0.1' };
+                        await saveConfig({ host: '127.0.0.1' });
+                        if (serverStatus.running) {
+                          setSaveMessage('Switched to 127.0.0.1 (Localhost). Restarting server...');
+                          await restartServer(next);
+                        } else {
+                          setSaveMessage('Host set to 127.0.0.1.');
+                        }
+                        setTimeout(() => setSaveMessage(null), 3500);
+                      }}
                       className={`btn btn-2xs ${form.host === '127.0.0.1' ? 'btn-primary' : 'btn-neutral'}`}
                     >
                       127.0.0.1 (Local)
                     </button>
                     <button
                       type="button"
-                      onClick={() => setForm({ ...form, host: '0.0.0.0' })}
+                      onClick={async () => {
+                        setForm(prev => ({ ...prev, host: '0.0.0.0' }));
+                        const next = { ...form, host: '0.0.0.0' };
+                        await saveConfig({ host: '0.0.0.0' });
+                        if (serverStatus.running) {
+                          setSaveMessage('Switched to 0.0.0.0 (LAN Mode). Restarting server...');
+                          await restartServer(next);
+                        } else {
+                          setSaveMessage('Host set to 0.0.0.0.');
+                        }
+                        setTimeout(() => setSaveMessage(null), 3500);
+                      }}
                       className={`btn btn-2xs ${form.host === '0.0.0.0' ? 'btn-primary' : 'btn-neutral'}`}
                     >
                       0.0.0.0 (LAN)
@@ -485,16 +512,38 @@ export default function Settings() {
                   <div className="flex items-center gap-1 text-2xs font-mono">
                     <button
                       type="button"
-                      onClick={() => setForm({ ...form, port: 8080 })}
+                      onClick={async () => {
+                        setForm(prev => ({ ...prev, port: 8080 }));
+                        const next = { ...form, port: 8080 };
+                        await saveConfig({ port: 8080 });
+                        if (serverStatus.running) {
+                          setSaveMessage('Switched to port 8080. Restarting server...');
+                          await restartServer(next);
+                        } else {
+                          setSaveMessage('Port set to 8080.');
+                        }
+                        setTimeout(() => setSaveMessage(null), 3500);
+                      }}
                       className={`btn btn-2xs ${form.port === 8080 ? 'btn-primary' : 'btn-neutral'}`}
                     >
                       8080 (Standard)
                     </button>
                     <button
                       type="button"
-                      onClick={() => setForm({ ...form, port: 9931 })}
+                      onClick={async () => {
+                        setForm(prev => ({ ...prev, port: 9931 }));
+                        const next = { ...form, port: 9931 };
+                        await saveConfig({ port: 9931 });
+                        if (serverStatus.running) {
+                          setSaveMessage('Switched to port 9931. Restarting server...');
+                          await restartServer(next);
+                        } else {
+                          setSaveMessage('Port set to 9931.');
+                        }
+                        setTimeout(() => setSaveMessage(null), 3500);
+                      }}
                       className={`btn btn-2xs ${form.port === 9931 ? 'btn-primary' : 'btn-neutral'}`}
-                      title="Set port to 9931 (future default)"
+                      title="Set port to 9931 (future default) and restart server if running"
                     >
                       9931 (Next Default)
                     </button>

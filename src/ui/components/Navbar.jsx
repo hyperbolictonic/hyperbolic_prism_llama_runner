@@ -3,7 +3,7 @@ import { useApp } from '../context/AppContext';
 import { Terminal, Play, Square, RotateCw, Search, Globe, Shield, Copy, Check } from 'lucide-react';
 
 export default function Navbar() {
-  const { serverStatus, config, systemInfo, startServer, stopServer, restartServer, setActiveTab, toggleNetworkAccess } = useApp();
+  const { serverStatus, config, systemInfo, startServer, stopServer, restartServer, setActiveTab, toggleNetworkAccess, setServerPort } = useApp();
 
   const [copiedLan, setCopiedLan] = useState(false);
   const isRunning = serverStatus.running;
@@ -53,6 +53,38 @@ export default function Navbar() {
 
       {/* Quick Server Controls (Right) */}
       <div className="flex items-center gap-3" data-tiny-nodrag>
+        {/* Quick Port Switcher */}
+        <div className="dropdown dropdown-end" data-tiny-nodrag>
+          <div
+            tabIndex={0}
+            role="button"
+            className="btn btn-ghost btn-xs font-mono text-2xs px-2.5 py-1 border border-base-300 hover:border-primary/50 text-base-content/80 gap-1 rounded-md"
+            title="Click to switch port (8080 or 9931)"
+          >
+            <span className="opacity-50">Port:</span>
+            <span className={port === 9931 ? 'text-primary font-bold' : 'text-white font-bold'}>{port}</span>
+          </div>
+          <ul tabIndex={0} className="dropdown-content menu p-1 shadow-xl bg-base-200 border border-base-300 rounded-box w-36 z-50 text-xs font-mono mt-1">
+            <li>
+              <button
+                onClick={() => setServerPort(8080)}
+                className={`py-1.5 px-2 flex justify-between ${port === 8080 ? 'active text-white font-bold' : ''}`}
+              >
+                <span>8080</span>
+                <span className="text-2xs opacity-50">Standard</span>
+              </button>
+            </li>
+            <li>
+              <button
+                onClick={() => setServerPort(9931)}
+                className={`py-1.5 px-2 flex justify-between ${port === 9931 ? 'active text-primary font-bold' : ''}`}
+              >
+                <span>9931</span>
+                <span className="badge badge-primary badge-outline badge-2xs">Next</span>
+              </button>
+            </li>
+          </ul>
+        </div>
         {/* Network LAN Access Toggle */}
         <div
           className={`flex items-center gap-2 px-2.5 py-1 rounded-md border transition-all text-xs ${
