@@ -117,12 +117,12 @@ export default function Dashboard() {
             {/* Quick Actions */}
             <div className="flex flex-wrap items-center gap-2">
               {isRunning ? (
-                <button onClick={stopServer} className="btn btn-error btn-sm gap-2 font-bold shadow-md">
+                <button onClick={() => stopServer()} className="btn btn-error btn-sm gap-2 font-bold shadow-md">
                   <Square className="w-4 h-4 fill-current" />
                   <span>Stop Server</span>
                 </button>
               ) : (
-                <button onClick={startServer} disabled={isStarting} className="btn btn-primary btn-sm gap-2 font-bold shadow-md">
+                <button onClick={() => startServer()} disabled={isStarting} className="btn btn-primary btn-sm gap-2 font-bold shadow-md">
                   {isStarting ? (
                     <>
                       <span className="loading loading-spinner loading-xs"></span>
@@ -137,7 +137,7 @@ export default function Dashboard() {
                 </button>
               )}
 
-              <button onClick={restartServer} className="btn btn-neutral btn-sm btn-square" title="Restart Server">
+              <button onClick={() => restartServer()} className="btn btn-neutral btn-sm btn-square" title="Restart Server">
                 <RotateCw className="w-4 h-4" />
               </button>
 

@@ -145,7 +145,7 @@ export default function Navbar() {
 
         {isRunning ? (
           <button
-            onClick={stopServer}
+            onClick={() => stopServer()}
             className="btn btn-error btn-sm gap-2 font-bold shadow-md"
             title="Stop Inference Server"
           >
@@ -154,7 +154,7 @@ export default function Navbar() {
           </button>
         ) : (
           <button
-            onClick={startServer}
+            onClick={() => startServer()}
             disabled={isStarting}
             className="btn btn-primary btn-sm gap-2 font-bold shadow-md"
             title="Start Inference Server"
@@ -174,7 +174,7 @@ export default function Navbar() {
         )}
 
         <button
-          onClick={restartServer}
+          onClick={() => restartServer()}
           className="btn btn-ghost btn-sm btn-square"
           title="Restart Server"
         >

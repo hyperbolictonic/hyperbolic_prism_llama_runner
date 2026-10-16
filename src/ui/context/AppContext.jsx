@@ -244,7 +244,11 @@ export function AppProvider({ children }) {
 
   async function startServer(overrideConfig = null) {
     if (typeof window.tiny === 'undefined') return;
-    const cfg = overrideConfig || config;
+    const isEvent = overrideConfig && (overrideConfig.nativeEvent || overrideConfig._reactName || overrideConfig.target || overrideConfig.bubbles !== undefined);
+    const cfg = (!isEvent && overrideConfig && typeof overrideConfig === 'object')
+      ? { ...config, ...overrideConfig }
+      : config;
+
     if (!cfg.selectedModel) {
       window.tiny.dialog.alert('No Model Selected', 'Please select a .gguf model in Model Manager before starting the inference server.');
       return;
@@ -278,8 +282,12 @@ export function AppProvider({ children }) {
   }
 
   async function restartServer(overrideConfig = null) {
+    const isEvent = overrideConfig && (overrideConfig.nativeEvent || overrideConfig._reactName || overrideConfig.target || overrideConfig.bubbles !== undefined);
+    const cfg = (!isEvent && overrideConfig && typeof overrideConfig === 'object')
+      ? { ...config, ...overrideConfig }
+      : config;
     await stopServer();
-    setTimeout(() => startServer(overrideConfig), 800);
+    setTimeout(() => startServer(cfg), 800);
   }
 
   async function saveConfig(updates) {
